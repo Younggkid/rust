@@ -36,6 +36,11 @@ mod pass_manager;
 
 use pass_manager::{self as pm, Lint, MirLint, WithMinOptLevel};
 
+
+// safedrop add
+pub mod safedrop_check;
+use safedrop_check::{SafeDropGraph, FuncMap};
+
 mod abort_unwinding_calls;
 mod add_call_guards;
 mod add_moves_for_packed_drops;
@@ -119,6 +124,7 @@ pub fn provide(providers: &mut Providers) {
         mir_for_ctfe_of_const_arg,
         optimized_mir,
         is_mir_available,
+        safedrop_check,
         is_ctfe_mir_available: |tcx, did| is_mir_available(tcx, did),
         mir_callgraph_reachable: inline::cycle::mir_callgraph_reachable,
         mir_inliner_callees: inline::cycle::mir_inliner_callees,
@@ -140,6 +146,26 @@ pub fn provide(providers: &mut Providers) {
 fn is_mir_available(tcx: TyCtxt<'_>, def_id: DefId) -> bool {
     let def_id = def_id.expect_local();
     tcx.mir_keys(()).contains(&def_id)
+}
+
+
+fn safedrop_check<'tcx>(tcx: TyCtxt<'tcx>, def_id: DefId) -> () {
+    if let Some(_other) = tcx.hir().body_const_context(def_id.expect_local()){
+        return;
+    }
+    if tcx.is_mir_available(def_id) {
+        let body = tcx.optimized_mir(def_id);
+        let mut func_map = FuncMap::new();
+        let mut safedrop_graph = SafeDropGraph::new(&body, tcx, def_id);
+        safedrop_graph.solve_scc();
+        safedrop_graph.safedrop_check(0, tcx, &mut func_map);
+        if safedrop_graph.visit_times <= 10000{
+            safedrop_graph.output_warning();
+        }
+        else{
+            println!("over_visited: {:?}", def_id);
+        }
+    }
 }
 
 /// Finds the full set of `DefId`s within the current crate that have

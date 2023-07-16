@@ -20,6 +20,11 @@ rustc_queries! {
         desc { "trigger a delay span bug" }
     }
 
+    //safedrop added
+    query safedrop_check(_: DefId) -> () {
+        desc { "check safedrop bugs in rustc mir" }
+    }
+
     query resolutions(_: ()) -> &'tcx ty::ResolverOutputs {
         eval_always
         no_hash
